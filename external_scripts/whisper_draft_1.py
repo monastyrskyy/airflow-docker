@@ -9,9 +9,9 @@ current_datetime = datetime.now()
 model = whisper.load_model('tiny')
 
 # option = whisper.DecodingOptions(language='de', fp16=False)
-result = model.transcribe('/home/maksym/Documents/whisper/montana.mp3')
+result = model.transcribe('/home/maksym/Documents/whisper/files/50-states/transcriptions/aaaaaa/montana.mp3')
 
-save_target = f'/home/maksym/Documents/whisper/montana{current_datetime}.vtt'
+save_target = f'/home/maksym/Documents/whisper/files/50-states/transcriptions/aaaaaa/montana{current_datetime}.vtt'
 
 with open(save_target, 'w') as file:
     for indx, segment in enumerate(result['segments']):
