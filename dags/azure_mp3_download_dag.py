@@ -20,7 +20,10 @@ python /home/maksym/Documents/airflow-docker/external_scripts/azure_mp3_download
 
 with DAG("azure_mp3_download_dag", 
          start_date = datetime(2024, 8, 15), 
-         schedule_interval = "@hourly", catchup = False) as dag:
+         schedule_interval = "@hourly", 
+         catchup = False, 
+         depends_on_past = True # doesn't run, if the most recent run is not finished
+         ) as dag:
     
     run_local_script = BashOperator(
         task_id = "run_download_script",

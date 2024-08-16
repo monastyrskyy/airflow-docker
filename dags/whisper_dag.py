@@ -11,7 +11,10 @@ python /home/maksym/Documents/airflow-docker/external_scripts/whisper_draft_1.py
 
 with DAG("whisper_dag", 
          start_date = datetime(2024, 8, 13), 
-         schedule_interval = "* * * * *", catchup = False) as dag:
+         schedule_interval = "* * * * *", 
+         catchup = False, 
+         depends_on_past = True # doesn't run, if the most recent run is not finished
+         ) as dag:
     
     run_local_script = BashOperator(
         task_id = "run_local_script_with_env",
