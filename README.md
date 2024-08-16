@@ -91,3 +91,7 @@ on how to get airflow to run an outside python script (that requires its own env
     - https://www.youtube.com/watch?v=aTaytcxy2Ck 
     - https://www.youtube.com/watch?v=IH1-0hwFZRQ 
     - https://www.youtube.com/watch?v=Z4wLw33fsJI
+- **Problem:**  I wanted to trigger the run of the transcription script using Airflow, but my Docker instance didn't have the resources necessary to run the large transcription model.
+    - The solution was to trigger a local script that would run on the underlying computer's resources, but would be triggered by Airflow from within Docker.
+        - **Solution A** was to activate the local env of the script and then run the script. I was not able to do this.
+        - **Solution B** was to download all the same dependencies as in the local env into the Docker image. This worked, and that's the solution I went with. 
