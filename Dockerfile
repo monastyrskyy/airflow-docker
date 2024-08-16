@@ -4,6 +4,8 @@ FROM apache/airflow:2.9.3
 RUN pip install openai-whisper
 RUN pip install azure-storage-blob
 RUN pip install python-dotenv
+RUN pip install sqlalchemy
+RUN pip install pymssql
 
 
 # Switch to the root user
