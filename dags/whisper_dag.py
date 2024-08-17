@@ -14,21 +14,19 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from datetime import datetime
 
-# Command to activate the environment and run the script
-# source /home/maksym/Documents/whisper/whisper-env/bin/activate && \
-# past the above back into the bash command
+
 bash_command = """
-python /home/maksym/Documents/airflow-docker/external_scripts/whisper_draft_1.py
+python /home/maksym/Documents/airflow-docker/external_scripts/whisper_transcription.py
 """
 
-with DAG("whisper_dag", 
+with DAG("whisper_transcription_dag", 
          start_date = datetime(2024, 8, 13), 
-         schedule_interval = "* * * * *", 
+         schedule_interval = "@continuous", 
          catchup = False, 
          max_active_runs=1 # doesn't run, if the most recent run is not finished
          ) as dag:
     
     run_local_script = BashOperator(
-        task_id = "run_local_script_with_env",
+        task_id = "whisper_transcription_task",
         bash_command = bash_command
     )

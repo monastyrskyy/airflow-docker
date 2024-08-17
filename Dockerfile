@@ -1,11 +1,11 @@
 FROM apache/airflow:2.9.3
 
 # Install the additional Python package
+RUN pip install torch torchvision torchaudio
 RUN pip install openai-whisper
 RUN pip install azure-storage-blob
 RUN pip install python-dotenv
-RUN pip install sqlalchemy
-RUN pip install pymssql
+RUN pip install sqlalchemy pymssql
 
 
 # Switch to the root user
