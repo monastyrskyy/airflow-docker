@@ -29,6 +29,21 @@
 from azure.storage.blob import BlobServiceClient
 from dotenv import load_dotenv
 import os
+from sqlalchemy import create_engine, text
+from datetime import datetime
+
+# Load environment variables from .env file
+load_dotenv("/home/maksym/Documents/airflow-docker/.env")
+sql_server_name = os.environ["SQLServerName"]
+database_name = os.environ["DBName"]
+sql_username = os.environ["SQLUserName"]
+sql_password = os.environ["SQLPass"]
+
+
+# Construct the SQLAlchemy connection string
+connection_string = f"mssql+pymssql://{sql_username}:{sql_password}@{sql_server_name}/{database_name}"
+engine = create_engine(connection_string)
+
 
 # Load environment variables from .env file
 load_dotenv("/home/maksym/Documents/airflow-docker/.env")
@@ -60,5 +75,23 @@ for blob in container_client.list_blobs():
             download_file.write(download_data.readall())
         
         print(f"Downloaded {blob.name} to {download_file_path}")
+
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # To be tested and monitored on Azure:
+        # Update the record in SQL:
+        with engine.begin() as conn:
+            update_query = text("""
+                UPDATE rss_schema.rss_feed
+                SET download_flag_local = 'Y', download_dt_local = :current_datetime
+                WHERE title = :title
+            """)
+            conn.execute(update_query, {
+                'current_datetime': datetime.now(),
+                'title': blob.name
+            })
+            print(f"Updated record for '{blob.name}' in the database.")
+
+
+        
     else:
         print(f"File {download_file_path} already exists. Skipping download.")
