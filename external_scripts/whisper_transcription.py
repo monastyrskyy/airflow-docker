@@ -1,8 +1,34 @@
-# tutorial: https://www.youtube.com/watch?v=UWOPQlxk-LM
-# now have to schedule this with airflow.
+# ===================================================================================
+#                      _____          _  _____                 
+#                     |  __ \        | |/ ____|                
+#                     | |__) |__   __| | (___  _   _ _ __ ___  
+#                     |  ___/ _ \ / _` |\___ \| | | | '_ ` _ \ 
+#                     | |  | (_) | (_| |____) | |_| | | | | | |
+#                     |_|   \___/ \__,_|_____/ \__,_|_| |_| |_|
+#                                                              
+# ===================================================================================
+#
+# Script:      whisper_transcription.py
+# Description: Checks the SQL database for non-transcribed episodes, takes one, 
+#              transcribes it, and marks it as transcribed on Azure.
+#
+# ===================================================================================
+# 
+# Related DAG: none
+#       - This is scheduled with a cronjob; airflow within Docker was too much trouble
+#
+# ===================================================================================
+#
+# Misc.:
+#       - Tutorial: https://www.youtube.com/watch?v=UWOPQlxk-LM
+# 
+# ===================================================================================
 
+
+
+
+# Libraries
 from datetime import datetime
-import torch
 import whisper 
 from whisper.utils import get_writer
 import os
@@ -28,11 +54,13 @@ engine = create_engine(connection_string)
 
 with engine.begin() as conn:
     # Check if the item already exists
+    # ORDER BY NEWID() creates a random id for each row and sorts it. Basically randomizes which podcast is picked.
     check_query = text("SELECT top(1) title \
                        FROM rss_schema.rss_feed \
                        WHERE transcription_dt IS NULL \
                        AND download_flag_local = 'Y' AND \
-                       podcast_title NOT IN ('Geschichten aus der Geschichte', 'Kino+')")
+                       podcast_title NOT IN ('Geschichten aus der Geschichte', 'Kino+') \
+                       ORDER BY NEWID()")
     result = conn.execute(check_query).fetchall()
 
     title_sql = result[0][0]
@@ -96,9 +124,6 @@ with engine.begin() as conn:
     })
     print(f"Updated record for '{title_sql}' in the database.")
                             
-#####
-# Section 4
-#####
-# Pushing the transcribed file to Azure
+
 
 
