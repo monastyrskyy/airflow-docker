@@ -10,7 +10,7 @@
 #
 # Script:      azure_mp3_download.py
 # Description: Downloads the mp3 files from Azure Blob Storage periodically, 
-#              only keeping the ones that are not already downloaded.
+#              only the ones that are not already downloaded.
 #
 # ===================================================================================
 # 
@@ -76,8 +76,6 @@ for blob in container_client.list_blobs():
         
         print(f"Downloaded {blob.name} to {download_file_path}")
 
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # To be tested and monitored on Azure:
         # Update the record in SQL:
         with engine.begin() as conn:
             update_query = text("""
