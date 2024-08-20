@@ -231,10 +231,20 @@ df = df[['Noun', 'Article', 'Number', 'Plural', 'Frequency']]
 
 
 
+# the merge below is case insensitive. Adding this to remove any duplicates, regardless of case
+# Create a temporary lowercase version of the DataFrame for grouping
+df['Noun_lower'] = df['Noun'].str.lower()
+df['Article_lower'] = df['Article'].str.lower()
+df['Number_lower'] = df['Number'].str.lower()
+
+# Step 2: Drop duplicates based on the lowercase columns
+df_deduped = df.drop_duplicates(subset=['Noun_lower', 'Article_lower', 'Number_lower'])
+
+# Step 3: Drop the temporary lowercase columns
+df = df_deduped.drop(columns=['Noun_lower', 'Article_lower', 'Number_lower'])
 
 
-
-
+print(df[0:10])
 
 
 
@@ -260,6 +270,22 @@ values_clause = ", ".join(
      for _, row in df.iterrows()]
 )
 
+
+# Preventing a one-to-many join in the MERGE query below
+delete_duplicates = f"""
+DELETE FROM vocab.nouns
+WHERE Noun in (
+    SELECT Noun
+    FROM vocab.nouns
+    group by Noun, Article, Number
+    having count(*) > 1
+);
+"""
+
+# Execute the query in the database
+with engine.begin() as conn:
+    conn.execute(text(delete_duplicates))
+    print('Deleted any applicable duplicates, if there were any.')
 
 
 # Construct the full SQL query with all rows in the VALUES clause
