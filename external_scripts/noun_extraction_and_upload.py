@@ -30,6 +30,7 @@ from dotenv import load_dotenv
 import os
 from sqlalchemy import create_engine, text
 from datetime import datetime
+import re
 
 pd.set_option('display.max_rows', 1000)
 
@@ -195,6 +196,14 @@ df.loc[(df['Number'] == 'Plur') & (df['Singular'] != 'NA'), 'Number'] = 'Sing'
 # For when the base word is some declension (i.e. dem Menschen vs der Mensch)
 df.loc[(df['Noun'] != df['Singular']) & (df['Singular'] != 'NA'), 'Noun'] = df['Singular']
 
+
+# Function to remove problematic characters while keeping dashes and umlauts
+# They break the SQL merge query
+def clean_noun(noun):
+    return re.sub(r"[^\wäöüÄÖÜß-]", "", noun)
+
+# Apply the cleaning function to the Noun column
+df['Noun'] = df['Noun'].apply(clean_noun)
 
 # Perform aggregation to get distinct records
 df = df.groupby(['Noun', 'Gender', 'Number']).agg({
