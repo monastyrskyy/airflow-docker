@@ -24,7 +24,7 @@
 
 # Transcribe to happen every 20 mins
 # Couldn't schedule this in Airflow Docker because of the lack of GPU access, so doing it locally in crontab.
-*/20 * * * * /home/maksym/Documents/airflow-docker/external_scripts/bash_scripts/whisper_transcription_wrapper.sh
+*/30 * * * * /home/maksym/Documents/airflow-docker/external_scripts/bash_scripts/whisper_transcription_wrapper.sh
 
 
 
