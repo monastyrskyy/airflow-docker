@@ -48,6 +48,8 @@ nouns = Nouns()
 # Extracting the vocab.
 
 # SQL variables and strings
+# Load environment variables from .env file
+load_dotenv("/home/maksym/Documents/airflow-docker/.env")
 sql_server_name = os.environ["SQLServerName"]
 database_name = os.environ["DBName"]
 sql_username = os.environ["SQLUserName"]
@@ -66,7 +68,8 @@ with engine.begin() as conn:
     # transcription_location would be set to Azure once the upload has been done
     check_query = text("SELECT top(1) title \
                        FROM rss_schema.rss_feed \
-                       WHERE nouns_extraction_flag = 'N'")
+                       WHERE nouns_extraction_flag = 'N' \
+                       AND transcription_dt IS NOT NULL")
     result = conn.execute(check_query).fetchall()
 
     if result == []:
@@ -74,12 +77,13 @@ with engine.begin() as conn:
     else:
         title_sql = result[0][0]
         title_local = result[0][0].replace(' ', '-')
+        print(f'file name: {title_local}')
         # Edge-case check
         found_it = False
         # Walk through the directory tree
         for root, dirs, files in os.walk(search_directory):
             for file in files:
-                if file == title_local + '.txt':  # Check if the file matches the title
+                if title_local.startswith(file.replace('.txt', '')):  # not using exact ==, because file could be "toyota_cor.txt" and title_local = "toyota_corolla"
                     print(f"File found!")
                     print(file)
         
