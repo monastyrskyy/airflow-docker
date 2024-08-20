@@ -244,7 +244,7 @@ df_deduped = df.drop_duplicates(subset=['Noun_lower', 'Article_lower', 'Number_l
 df = df_deduped.drop(columns=['Noun_lower', 'Article_lower', 'Number_lower'])
 
 
-print(df[0:10])
+print(df.sort_values(by='Frequency', ascending=False)[0:10])
 
 
 
