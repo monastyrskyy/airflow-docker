@@ -88,8 +88,3 @@ for blob in container_client.list_blobs():
                 'title': blob.name
             })
             print(f"Updated record for '{blob.name}' in the database.")
-
-
-        
-    else:
-        print(f"File {download_file_path} already exists. Skipping download.")

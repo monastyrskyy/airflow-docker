@@ -70,7 +70,8 @@ with engine.begin() as conn:
     check_query = text("SELECT top(1) title \
                        FROM rss_schema.rss_feed \
                        WHERE nouns_extraction_flag = 'N' \
-                       AND transcription_dt IS NOT NULL")
+                       AND transcription_dt IS NOT NULL \
+                       AND language IN ('de', 'de-DE')")
     result = conn.execute(check_query).fetchall()
 
     if result == []:
@@ -139,7 +140,7 @@ for token in doc:
 
 # Create a DataFrame from the dictionary
 df = pd.DataFrame(list(noun_details.items()), columns=['Noun_Gender_Number', 'Frequency'])
-df[['Noun', 'Gender', 'Number']] = df['Noun_Gender_Number'].apply(pd.Series)
+df[['Noun', 'Gender', 'Number']] = df['Noun_Gender_Number'].apply(pd.Series).fillna('NA')
 df = df[['Noun', 'Gender', 'Number', 'Frequency']]
 
 
