@@ -85,7 +85,7 @@ with engine.begin() as conn:
         # Walk through the directory tree
         for root, dirs, files in os.walk(search_directory):
             for file in files:
-                if title_local.startswith(file.replace('.txt', '')):  # not using exact ==, because file could be "toyota_cor.txt" and title_local = "toyota_corolla"
+                if title_local.startswith(file.replace('.txt', '')) and root != "Conan-O’Brien-Needs-A-Friend":  # not using exact ==, because file could be "toyota_cor.txt" and title_local = "toyota_corolla"
                     print(f"File found!")
                     print(file)
         
