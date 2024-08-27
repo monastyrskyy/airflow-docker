@@ -8,13 +8,14 @@
 #                                                              
 # ===================================================================================
 #
-# Script:      noun_extraction_and_upload.py
+# Script:      retroactive_noun_extraction_and_upload.py
 # Description: Extracts the nouns from transcribed files along with useful info
 #              and uploads it to the nouns table and marks this in the feed table.
+#              This is for file that have been transcribed long ago.
 #
 # ===================================================================================
 # 
-# Related DAG: noun_extraction_and_upload.py
+# Related DAG: retroactive_noun_extraction_and_upload.py
 #
 # ===================================================================================
 
@@ -31,6 +32,7 @@ import os
 from sqlalchemy import create_engine, text
 from datetime import datetime
 import re
+import sys
 
 pd.set_option('display.max_rows', 1000)
 
@@ -60,48 +62,29 @@ engine = create_engine(connection_string)
 
 
 # Directory where transcriptions are locally
-search_directory = "/home/maksym/Documents/whisper/files/azure/transcriptions"
+search_directory = "/home/maksym/Documents/whisper/files/manual/german"
 
 
 
-with engine.begin() as conn:
-    # Grab an episode that has been transcribed, but transcription is only still on local
-    # transcription_location would be set to Azure once the upload has been done
-    check_query = text("SELECT top(1) title \
-                       FROM rss_schema.rss_feed \
-                       WHERE nouns_extraction_flag = 'N' \
-                       AND transcription_dt IS NOT NULL \
-                       AND language IN ('de', 'de-DE')")
-    result = conn.execute(check_query).fetchall()
 
-    if result == []:
-        print("No new vocab to upload.")
-    else:
-        title_sql = result[0][0]
-        title_local = result[0][0].replace(' ', '-')
-        print(f'file name: {title_local}')
-        # Edge-case check
-        found_it = False
-        # Walk through the directory tree
-        for root, dirs, files in os.walk(search_directory):
-            if "Conan-O’Brien-Needs-A-Friend" in dirs:
-                # Remove it from the list so os.walk will not traverse it
-                dirs.remove("Conan-O’Brien-Needs-A-Friend")
+# Walk through the directory tree
+for root, dirs, files in os.walk(search_directory):
+    for file in files:
+        if file.endswith('.txt') and not file.endswith('_nouns_extracted.txt'):
+            print(f"File found!")
+            print(file)
 
-            for file in files:
-                if title_local.startswith(file.replace('.txt', '')):  # not using exact ==, because file could be "toyota_cor.txt" and title_local = "toyota_corolla"
-                    print(f"File found!")
-                    print(file)
-        
-                    file_path = root + '/' + file
-                    break
-        
+            file_path = root + '/' + file
+            break
 
 
 
 
 
-
+# Sanity check
+if file_path.endswith('_nouns_extracted.txt'):
+    print("horrible condition is met. exiting...")
+    sys.exit()
 
 
 
@@ -231,8 +214,7 @@ df = df.drop(columns=['Gender'])
 
 df = df[['Noun', 'Article', 'Number', 'Plural', 'Frequency']]
 
-# Display the updated DataFrame
-# print(df)
+
 
 
 
@@ -308,18 +290,27 @@ WHEN NOT MATCHED THEN
 # Execute the query in the database
 with engine.begin() as conn:
     conn.execute(text(merge_query))
-
-    # And update the record for this file
-    update_query = text("""
-        UPDATE rss_schema.rss_feed
-        SET nouns_extraction_flag = 'Y', nouns_extraction_dt = :current_datetime
-        WHERE title = :title
-    """)
-    conn.execute(update_query, {
-        'current_datetime': datetime.now(),
-        'title': title_sql
-    })
-    print(f"Updated record for '{title_sql}' in the database.")
+    print('Nouns are merged.')
 
 
 
+
+
+
+#####
+# Section 4
+#####
+# Finally, if nothing else throws an error, I'm renaming the local file to not ever extract nouns from it again.
+
+
+
+# Split the file into name and extension
+file_name, file_extension = os.path.splitext(file_path)
+
+# Append '_nouns_extracted' to the file name
+new_file_name = file_name + '_nouns_extracted' + file_extension
+
+# Rename the file
+os.rename(file_path, new_file_name)
+
+print(f"File renamed to: {new_file_name}")
