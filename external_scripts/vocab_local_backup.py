@@ -65,3 +65,41 @@ with engine.begin() as conn:
         df.to_csv(output_file, index=False)
 
         print(f"Data has been written to {output_file}")
+
+with engine.begin() as conn:
+    check_query = text("SELECT * \
+                       FROM rss_schema.rss_feed")
+    result = conn.execute(check_query).fetchall()
+
+    if result == []:
+        print("Something ain't right.")
+    else:
+        # Convert the result to a pandas DataFrame
+        df = pd.DataFrame(result)
+
+        # Define the output CSV file path
+        output_file = os.path.join(output_dir, "episodes_table.csv")
+
+        # Write the DataFrame to a CSV file
+        df.to_csv(output_file, index=False)
+
+        print(f"Data has been written to {output_file}")
+
+with engine.begin() as conn:
+    check_query = text("SELECT * \
+                       FROM vocab.phrases")
+    result = conn.execute(check_query).fetchall()
+
+    if result == []:
+        print("Something ain't right.")
+    else:
+        # Convert the result to a pandas DataFrame
+        df = pd.DataFrame(result)
+
+        # Define the output CSV file path
+        output_file = os.path.join(output_dir, "phrases.csv")
+
+        # Write the DataFrame to a CSV file
+        df.to_csv(output_file, index=False)
+
+        print(f"Data has been written to {output_file}")

@@ -45,9 +45,13 @@ def commit_and_push():
             # Add nouns.csv to staging
             add_output = subprocess.check_output(["git", "add", "nouns.csv"], stderr=subprocess.STDOUT)
             print(add_output.decode())
+            add_output = subprocess.check_output(["git", "add", "episodes_table.csv"], stderr=subprocess.STDOUT)
+            print(add_output.decode())
+            add_output = subprocess.check_output(["git", "add", "phrases.csv"], stderr=subprocess.STDOUT)
+            print(add_output.decode())
 
             # Commit changes
-            commit_output = subprocess.check_output(["git", "commit", "-m", "Update nouns.csv"], stderr=subprocess.STDOUT)
+            commit_output = subprocess.check_output(["git", "commit", "-m", "Daily backup"], stderr=subprocess.STDOUT)
             print(commit_output.decode())
 
             # Push changes to the GitHub repository using the username and token
