@@ -95,3 +95,42 @@ on how to get airflow to run an outside python script (that requires its own env
     - The solution was to trigger a local script that would run on the underlying computer's resources, but would be triggered by Airflow from within Docker.
         - **Solution A** was to activate the local env of the script and then run the script. I was not able to do this.
         - **Solution B** was to download all the same dependencies as in the local env into the Docker image. This worked, and that's the solution I went with. 
+
+
+
+### Misc updates:
+
+### Updates, and notes:
+
+28/8/2024
+
+delete t
+FROM [vocab].[nouns] t
+WHERE t.Frequency < 0.1 * (
+    SELECT MAX(Frequency)
+    FROM [vocab].[nouns]
+    WHERE Noun = t.Noun
+)
+
+This is a pruning operation because the noun and gender identification process is not perfect. I'm only taking the biggest one, to prune off any unneeded records. The query and explanation is from ChatGPT.
+
+Let's say you have the following data for a noun Auto:
+
+| Noun | Article | Frequency |
+|------|---------|-----------|
+| Auto | das     | 5852      |
+| Auto | die     | 1         |
+| Auto | der     | 7         |
+
+Threshold Explanation:
+0.1: This value is a multiplier. When you multiply the maximum frequency by 0.1, you are calculating 10% of that maximum value.
+Comparison: The query compares the frequency of each row to this calculated value (10% of the maximum frequency for that noun). If the row's frequency is less than 10% of the maximum frequency, it is considered to be significantly lower and thus a candidate for deletion.
+Example Scenario:
+
+Maximum Frequency for Auto: 5852.
+10% of Maximum Frequency: 5852 * 0.1 = 585.2.
+In this case:
+
+The frequency 1 for Auto, die is far below 585.2.
+The frequency 7 for Auto, der is also far below 585.2.
+Since both 1 and 7 are less than 10% of the maximum frequency (585.2), these records would be deleted by the query.

@@ -293,6 +293,24 @@ with engine.begin() as conn:
     print('Deleted any applicable duplicates, if there were any.')
 
 
+
+# Pruning
+pruning = f"""
+delete t
+FROM [vocab].[nouns] t
+WHERE t.Frequency < 0.1 * (
+    SELECT MAX(Frequency)
+    FROM [vocab].[nouns]
+    WHERE Noun = t.Noun
+)
+"""
+
+# Execute the query in the database
+with engine.begin() as conn:
+    conn.execute(text(pruning))
+    print('Pruned away relatively low frequencies of words.')
+
+
 # Construct the full SQL query with all rows in the VALUES clause
 merge_query = f"""
 MERGE INTO vocab.nouns AS target
