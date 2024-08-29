@@ -28,5 +28,5 @@ with DAG("retroactive_noun_extraction_and_upload_dag",
     run_local_script = BashOperator(
         task_id = "retroactive_noun_extraction_and_upload_task",
         bash_command = bash_command,
-        execution_timeout=timedelta(seconds=90)
+        execution_timeout=timedelta(seconds=150)
     )

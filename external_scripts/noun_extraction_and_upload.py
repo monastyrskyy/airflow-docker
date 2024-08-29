@@ -248,6 +248,10 @@ df_deduped = df.drop_duplicates(subset=['Noun_lower', 'Article_lower', 'Number_l
 # Step 3: Drop the temporary lowercase columns
 df = df_deduped.drop(columns=['Noun_lower', 'Article_lower', 'Number_lower'])
 
+# Step 4: Drop any long non-sense words. 
+# Whisper generated this noun one time 'Too-many-tabs-to-many-tabs-to-many-tabs-to-many-tabs-to-many-tabs-to-many-tabs-to-many-tabs-to-many-'
+# It broke the Airflow job
+df = df[df['Noun'].str.len() <= 250]
 
 print(df.sort_values(by='Frequency', ascending=False)[0:10])
 
