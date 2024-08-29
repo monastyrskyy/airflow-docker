@@ -69,6 +69,9 @@ search_directory = "/home/maksym/Documents/whisper/files/manual/german"
 
 # Walk through the directory tree
 for root, dirs, files in os.walk(search_directory):
+    if "kino_plus_archive" in dirs:
+        # Remove it from the list so os.walk will not traverse it
+        dirs.remove("kino_plus_archive")
     for file in files:
         if file.endswith('.txt') and not file.endswith('_nouns_extracted.txt'):
             print(f"File found!")
@@ -230,6 +233,10 @@ df_deduped = df.drop_duplicates(subset=['Noun_lower', 'Article_lower', 'Number_l
 # Step 3: Drop the temporary lowercase columns
 df = df_deduped.drop(columns=['Noun_lower', 'Article_lower', 'Number_lower'])
 
+# Step 4: Drop any long non-sense words. 
+# Whisper generated this noun one time 'Too-many-tabs-to-many-tabs-to-many-tabs-to-many-tabs-to-many-tabs-to-many-tabs-to-many-tabs-to-many-'
+# It broke the Airflow job
+df = df[df['Noun'].str.len() <= 250]
 
 print(df.sort_values(by='Frequency', ascending=False)[0:10])
 
@@ -274,6 +281,21 @@ with engine.begin() as conn:
     conn.execute(text(delete_duplicates))
     print('Deleted any applicable duplicates, if there were any.')
 
+# Pruning
+pruning = f"""
+delete t
+FROM [vocab].[nouns] t
+WHERE t.Frequency < 0.1 * (
+    SELECT MAX(Frequency)
+    FROM [vocab].[nouns]
+    WHERE Noun = t.Noun
+)
+"""
+
+# Execute the query in the database
+with engine.begin() as conn:
+    conn.execute(text(pruning))
+    print('Pruned away relatively low frequencies of words.')
 
 # Construct the full SQL query with all rows in the VALUES clause
 merge_query = f"""
