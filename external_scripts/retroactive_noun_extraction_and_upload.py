@@ -238,6 +238,11 @@ df = df_deduped.drop(columns=['Noun_lower', 'Article_lower', 'Number_lower'])
 # It broke the Airflow job
 df = df[df['Noun'].str.len() <= 250]
 
+
+# Step 5: Adding last_updated_dt to be able to delete stale records
+df['last_updated_dt'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+
 print(df.sort_values(by='Frequency', ascending=False)[0:10])
 
 
@@ -258,9 +263,9 @@ print(df.sort_values(by='Frequency', ascending=False)[0:10])
 # Writing the data to the SQL database.
 
 # Construct the VALUES clause for the entire DataFrame
-# e.g. ('Auto', 'das', 'Sing', 'Autos', 2), ('Berufsleben', 'das', 'Sing', 'Berufsleben', 1)
+# e.g. ('Auto', 'das', 'Sing', 'Autos', 2, the datetime goes here), ('Berufsleben', 'das', 'Sing', 'Berufsleben', 1, the datetime goes)
 values_clause = ", ".join(
-    [f"('{row['Noun']}', '{row['Article']}', '{row['Number']}', '{row['Plural']}', {row['Frequency']})"
+    [f"('{row['Noun']}', '{row['Article']}', '{row['Number']}', '{row['Plural']}', {row['Frequency']}, '{row['last_updated_dt']}')"
      for _, row in df.iterrows()]
 )
 
@@ -281,6 +286,8 @@ with engine.begin() as conn:
     conn.execute(text(delete_duplicates))
     print('Deleted any applicable duplicates, if there were any.')
 
+
+
 # Pruning
 pruning = f"""
 delete t
@@ -297,22 +304,38 @@ with engine.begin() as conn:
     conn.execute(text(pruning))
     print('Pruned away relatively low frequencies of words.')
 
+# Deleting stale records
+delete_stale_records = f"""
+DELETE FROM vocab.nouns
+WHERE 
+    Frequency = 1
+    AND last_updated_dt < DATEADD(day, -1, GETDATE());
+"""
+
+# Execute the query in the database
+with engine.begin() as conn:
+    conn.execute(text(delete_stale_records))
+    print('Deleted low frequency words that have not been updated.')
+
 # Construct the full SQL query with all rows in the VALUES clause
 merge_query = f"""
 MERGE INTO vocab.nouns AS target
-USING (VALUES {values_clause}) AS source (Noun, Article, Number, Plural, Frequency)
+USING (VALUES {values_clause}) AS source (Noun, Article, Number, Plural, Frequency, last_updated_dt)
 ON target.Noun = source.Noun AND target.Article = source.Article AND target.Number = source.Number
 WHEN MATCHED THEN 
-    UPDATE SET target.Frequency = target.Frequency + source.Frequency
+    UPDATE SET 
+        target.Frequency = target.Frequency + source.Frequency,
+        target.last_updated_dt = source.last_updated_dt
 WHEN NOT MATCHED THEN
-    INSERT (Noun, Article, Number, Plural, Frequency)
-    VALUES (source.Noun, source.Article, source.Number, source.Plural, source.Frequency);
+    INSERT (Noun, Article, Number, Plural, Frequency, last_updated_dt)
+    VALUES (source.Noun, source.Article, source.Number, source.Plural, source.Frequency, source.last_updated_dt);
 """
 
 # Execute the query in the database
 with engine.begin() as conn:
     conn.execute(text(merge_query))
     print('Nouns are merged.')
+
 
 
 
