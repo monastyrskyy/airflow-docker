@@ -37,6 +37,8 @@ from sqlalchemy import create_engine, text
 import random
 import csv
 import portalocker
+from huggingface_hub import hf_hub_download
+
 
 
 #####
@@ -50,7 +52,7 @@ mp3_root_directory = "/home/maksym/Documents/whisper/files/azure/mp3"
 transcription_root_directory = "/home/maksym/Documents/whisper/files/azure/transcriptions"
 
 # Probability threshold for random selection
-selection_chance = 0.2  # Adjust this to make the selection more or less likely
+selection_chance = 0.2
 
 # Variables to store the selected MP3 file and its transcription location
 selected_mp3 = None
@@ -63,8 +65,6 @@ for root, dirs, files in os.walk(mp3_root_directory):
     # If the directory contains at least one untranscribed MP3 file, add it to the list
     if has_untranscribed_mp3:
         subdirectories.append(root)
-    else:
-        print(f'No untranscribed files here {root}')
 
 
 selected_directory = random.choice(subdirectories)
@@ -90,7 +90,10 @@ for root, dirs, files in os.walk(selected_directory):
                 
                 # Stop searching as we have found a random untranscribed file
                 break
-    if selected_mp3:
+    if not selected_mp3:
+        selected_mp3 = os.path.join(root, file)
+        print(root)
+    else:
         break
 
 title_local = os.path.splitext(os.path.basename(selected_mp3))[0]
@@ -102,8 +105,7 @@ if selected_mp3:
     print(f'Transcription target directory: {transcription_location}')
     print(f'mp3 Locationory: {mp3_location}')
     print(f'title_local: {title_local}')
-else:
-    print("No untranscribed MP3 files found.")
+
 
 
 
@@ -116,7 +118,15 @@ else:
 
 # Get the current date and time
 current_datetime = datetime.now()
-model = whisper.load_model('large-v3', device="cuda")
+
+
+if mp3_location == "/home/maksym/Documents/whisper/files/azure/mp3/Conan-O’Brien-Needs-A-Friend": # supposedly a much faster model that's still very good
+    model_path = hf_hub_download(repo_id = "distil-whisper/distil-large-v3-openai", filename="model.bin")
+    model = whisper.load_model(model_path, device="cuda")
+    print('Loaded the distilled model')
+else:
+    model = whisper.load_model('large-v3', device="cuda")
+    print('Loaded regular model')
 
 
 # Create the transcriptio directory for every file

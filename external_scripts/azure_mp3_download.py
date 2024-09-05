@@ -61,20 +61,24 @@ download_directory = "/home/maksym/Documents/whisper/files/azure"
 os.makedirs(download_directory, exist_ok=True)
 
 for blob in container_client.list_blobs():
-    download_file_path = os.path.join(download_directory, blob.name)
+    # Define both original and transcribed file paths
+    original_download_file_path = os.path.join(download_directory, blob.name)
+    transcribed_download_file_path = os.path.join(
+        download_directory, os.path.splitext(blob.name)[0] + "_transcribed" + os.path.splitext(blob.name)[1]
+    )
 
-    # Check if the file already exists locally
-    if not os.path.exists(download_file_path):
+    # Check if either the original or transcribed file already exists locally
+    if not (os.path.exists(original_download_file_path) or os.path.exists(transcribed_download_file_path)):
         # Ensure the directory exists by creating it
-        os.makedirs(os.path.dirname(download_file_path), exist_ok=True)
+        os.makedirs(os.path.dirname(original_download_file_path), exist_ok=True)
         
         # Download the blob
         blob_client = container_client.get_blob_client(blob)
-        with open(download_file_path, "wb") as download_file:
+        with open(original_download_file_path, "wb") as download_file:
             download_data = blob_client.download_blob()
             download_file.write(download_data.readall())
         
-        print(f"Downloaded {blob.name} to {download_file_path}")
+        print(f"Downloaded {blob.name} to {original_download_file_path}")
 
         # Update the record in SQL:
         with engine.begin() as conn:
@@ -88,5 +92,7 @@ for blob in container_client.list_blobs():
                 'title': blob.name
             })
             print(f"Updated record for '{blob.name}' in the database.")
+
+
 
 print('This is printed after the for loop.')
