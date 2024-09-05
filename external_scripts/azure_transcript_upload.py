@@ -29,13 +29,14 @@ from azure.storage.blob import BlobServiceClient
 from dotenv import load_dotenv
 import os
 from sqlalchemy import create_engine, text
+import pandas as pd
+import portalocker
+from datetime import datetime
 
 
 
 # Load environment variables from .env file
 load_dotenv("/home/maksym/Documents/airflow-docker/.env")
-
-
 
 # SQL variables and strings
 sql_server_name = os.environ["SQLServerName"]
@@ -63,57 +64,92 @@ def upload_file_to_blob(local_file_path, blob_name):
 
 
 
-# Directory where transcriptions are locally
-search_directory = "/home/maksym/Documents/whisper/files/azure/transcriptions"
+# Function to upload individual files to Azure Blob Storage
+def upload_file_to_blob(local_file_path, blob_name):
+    blob_client = container_client.get_blob_client(blob_name)
+    with open(local_file_path, "rb") as data:
+        blob_client.upload_blob(data, overwrite=True)
 
 
 
-with engine.begin() as conn:
-    # Grab an episode that has been transcribed, but transcription is only still on local
-    # transcription_location would be set to Azure once the upload has been done
-    check_query = text("SELECT top(1) title \
-                       FROM rss_schema.rss_feed \
-                       WHERE transcription_location IS NULL \
-                       AND transcription_dt IS NOT NULL")
-    result = conn.execute(check_query).fetchall()
 
-    if result == []:
-        print("No new transcripts to upload.")
-    else:
-        title_sql = result[0][0]
-        title_local = result[0][0].replace(' ', '-')
-        # Edge-case check
-        found_it = False
-        # Walk through the directory tree
-        for root, dirs, files in os.walk(search_directory):
-            # Check if the current directory name matches the title_local
-            if os.path.basename(root) == title_local:
-                # Upload all files in this directory
-                for file_name in files:
-                    local_file_path = os.path.join(root, file_name)
-                    # Generate the corresponding blob path (maintaining directory structure)
-                    relative_path = os.path.relpath(local_file_path, search_directory)
-                    blob_name = relative_path
-                    # Upload the file to Azure Blob Storage
-                    upload_file_to_blob(local_file_path, blob_name)
-                    found_it = True
-                print(f"Uploaded the transcription for '{title_sql}' is uploaded to Azure blob storage.")
+# Function to delete a specific row
+def delete_row(file_path_to_delete):
+    # Lock the file for exclusive access
+    with open(csv_file_path, 'r+', newline='') as file:
+        try:
+            # Lock the file for exclusive access
+            portalocker.lock(file, portalocker.LOCK_EX)
 
-                # Update the record in SQL:
-                with engine.begin() as conn:
-                    update_query = text("""
-                        UPDATE rss_schema.rss_feed
-                        SET transcription_location = 'Azure'
-                        WHERE title = :title
-                    """)
-                    conn.execute(update_query, {
-                        'title': title_sql
-                    })
-                    print(f"Updated record for '{title_sql}' in the database.")
+            # Read the CSV into a DataFrame
+            df = pd.read_csv(file)
 
-                break
-        if found_it == False:
-            print(f"{title_sql}'s transcription_location IS NULL AND transcription_dt IS NOT NULL in the database, but it is not found locally.")
+            # Filter the DataFrame to exclude the row with the given file_path
+            df_filtered = df[df['location'] != file_path_to_delete]
+
+            # Move the file pointer back to the start and truncate the file
+            file.seek(0)
+            file.truncate()
+
+            # Write the filtered DataFrame back to the file
+            df_filtered.to_csv(file, index=False)
         
+        finally:
+            # Unlock the file after writing
+            portalocker.unlock(file)
+
+
+
+
+
+
+
+# File path to your CSV
+csv_file_path = '/home/maksym/Documents/airflow-docker/queues/transcriptions.csv'
+search_directory = '/home/maksym/Documents/whisper/files/azure/transcriptions'
+pd.set_option('display.max_colwidth', 120)
+# Read the CSV file into a DataFrame
+df = pd.read_csv(csv_file_path)
+
+
+for index, row in df.iterrows():
+    directory_path = row['location'].replace('""', '"')
+    if os.path.exists(directory_path) and os.path.isdir(directory_path):
+        # Iterate over all files in the directory
+        for root, dirs, files in os.walk(directory_path):
+            for file_name in files:
+                # Full path to the file
+                file_path = os.path.join(root, file_name)
+                
+                # Generate the corresponding blob path (relative to the search directory)
+                relative_path = os.path.relpath(file_path, search_directory)
+                blob_name = relative_path.replace("\\", "/")  # Ensure correct formatting for Azure
+                
+                # Upload the file to Azure Blob Storage
+                upload_file_to_blob(file_path, blob_name)
+
+        print(f"Uploaded all files in '{directory_path}' to Azure blob storage.")
+
+        file_name_without_extension = os.path.basename(directory_path)
+
+
+        # Update the record in SQL:
+        with engine.begin() as conn:
+            update_query = text("""
+                UPDATE rss_schema.rss_feed
+                SET transcription_location = 'Azure', transcription_dt = :current_datetime
+                WHERE REPLACE(title, ' ', '-') = :title
+            """)
+            conn.execute(update_query, {
+                'title': file_name_without_extension,
+                'current_datetime': datetime.now()
+            })
+            print(f"Updated record for '{file_name_without_extension}' in the database.")
+
+        delete_row(row['location'])
+        print(f"Deleted the record here from the queue file:{row['location']}")
+
+
+
 
 

@@ -20,7 +20,7 @@ python /home/maksym/Documents/airflow-docker/external_scripts/azure_transcript_u
 
 with DAG("azure_transcript_upload_dag", 
          start_date = datetime(2024, 8, 15), 
-         schedule_interval = "*/20 * * * *", 
+         schedule_interval = "0 9 * * *", 
          catchup = False, 
          max_active_runs=1 # doesn't run, if the most recent run is not finished
          ) as dag:

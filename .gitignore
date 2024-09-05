@@ -1,6 +1,7 @@
 logs/
 crontab_logs/
 /dags/__pycache__/
+queues/
 
 .gitattributes
 .env

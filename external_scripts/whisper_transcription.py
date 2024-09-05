@@ -34,96 +34,132 @@ from whisper.utils import get_writer
 import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-
-# Load environment variables from .env file
-load_dotenv("/home/maksym/Documents/airflow-docker/.env")
-sql_server_name = os.environ["SQLServerName"]
-database_name = os.environ["DBName"]
-sql_username = os.environ["SQLUserName"]
-sql_password = os.environ["SQLPass"]
-
-# Construct the SQLAlchemy connection string
-connection_string = f"mssql+pymssql://{sql_username}:{sql_password}@{sql_server_name}/{database_name}"
-engine = create_engine(connection_string)
+import random
+import csv
+import portalocker
 
 
 #####
 # Section 1
 #####
-# Getting one episode that was not transcribed.
+# Finding an episode locally
+# Benefit is that transcription can happen without the internet as well.
 
-with engine.begin() as conn:
-    # Check if the item already exists
-    # ORDER BY NEWID() creates a random id for each row and sorts it. Basically randomizes which podcast is picked.
-    check_query = text("SELECT top(1) title \
-                       FROM rss_schema.rss_feed \
-                       WHERE transcription_dt IS NULL \
-                       AND download_flag_local = 'Y' AND \
-                       podcast_title NOT IN ('Geschichten aus der Geschichte', 'Kino+') \
-                       ORDER BY NEWID()")
-    result = conn.execute(check_query).fetchall()
+# Directories for MP3s and transcriptions
+mp3_root_directory = "/home/maksym/Documents/whisper/files/azure/mp3"
+transcription_root_directory = "/home/maksym/Documents/whisper/files/azure/transcriptions"
 
-    title_sql = result[0][0]
-    title_local = result[0][0].replace(' ', '-')
+# Probability threshold for random selection
+selection_chance = 0.2  # Adjust this to make the selection more or less likely
 
-    # Walk through the directory and its subdirectories 
-    # Once the file is found locally, its location will be noted and the transcription location created
-    search_directory = "/home/maksym/Documents/whisper/files/azure/mp3"
-    for root, dirs, files in os.walk(search_directory):
-        for file in files:
-            if file == title_local + '.mp3':  # Check if the file matches the title
-                print(f"File found!")
-                print(file)
-    
-                transcription_location = root.replace('mp3', 'transcriptions')
-                mp3_location = root
+# Variables to store the selected MP3 file and its transcription location
+selected_mp3 = None
+transcription_location = None
+
+# Picking a random subdirectory
+subdirectories = []
+for root, dirs, files in os.walk(mp3_root_directory):
+    has_untranscribed_mp3 = any(file.endswith(".mp3") and not file.endswith("_transcribed.mp3") for file in files)
+    # If the directory contains at least one untranscribed MP3 file, add it to the list
+    if has_untranscribed_mp3:
+        subdirectories.append(root)
+    else:
+        print(f'No untranscribed files here {root}')
+
+
+selected_directory = random.choice(subdirectories)
+
+
+
+# Walk through the MP3 directory and its subdirectories
+for root, dirs, files in os.walk(selected_directory):
+    for file in files:
+        # Skip files that are already marked as transcribed
+        if file.endswith(".mp3") and not file.endswith("_transcribed.mp3"):
+            # Randomly decide if this file should be selected
+            if random.random() < selection_chance:
+                # If selected, set the MP3 file path and calculate the transcription directory
+                selected_mp3 = os.path.join(root, file)
+                
+                # Get the relative path of the MP3 file and determine the transcription location
+                relative_path = os.path.relpath(selected_mp3, mp3_root_directory)
+                transcription_location = os.path.join(transcription_root_directory, os.path.dirname(relative_path))
+                
+                # Create the transcription directory if it doesn't exist
+                os.makedirs(transcription_location, exist_ok=True)
+                
+                # Stop searching as we have found a random untranscribed file
                 break
-    print(f'transcription_location: {transcription_location}')
-    print(f'mp3_location: {mp3_location}')
+    if selected_mp3:
+        break
+
+title_local = os.path.splitext(os.path.basename(selected_mp3))[0]
+mp3_location = transcription_location.replace('transcriptions', 'mp3')
+
+# Output the result
+if selected_mp3:
+    print(f'MP3 file selected: {selected_mp3}')
+    print(f'Transcription target directory: {transcription_location}')
+    print(f'mp3 Locationory: {mp3_location}')
+    print(f'title_local: {title_local}')
+else:
+    print("No untranscribed MP3 files found.")
 
 
 
 
 
-    #####
-    # Section 2
-    #####
-    # Transcribing the episode
+#####
+# Section 2
+#####
+# Transcribing the episode
 
-    # Get the current date and time
-    current_datetime = datetime.now()
-    model = whisper.load_model('large-v3', device="cuda")
-
-
-    # Create the transcriptio directory for every file
-    output_dir = transcription_location + '/' + title_local + '/'
-    os.makedirs(output_dir, exist_ok=True)
-
-    result = model.transcribe(mp3_location + '/' + title_local + '.mp3')
-
-    writer = get_writer("all", output_dir)
-    writer(result, title_local)
+# Get the current date and time
+current_datetime = datetime.now()
+model = whisper.load_model('large-v3', device="cuda")
 
 
+# Create the transcriptio directory for every file
+output_dir = transcription_location + '/' + title_local + '/'
+os.makedirs(output_dir, exist_ok=True)
+
+result = model.transcribe(mp3_location + '/' + title_local + '.mp3')
+
+writer = get_writer("all", output_dir)
+writer(result, title_local)
 
 
+# Renaming the MP3 file after transcription
+original_file_path = mp3_location + '/' + title_local + '.mp3'
+new_file_path = mp3_location + '/' + title_local + '_transcribed.mp3'
 
-    #####
-    # Section 3
-    #####
-    # Updating the record
-
-    update_query = text("""
-        UPDATE rss_schema.rss_feed
-        SET transcription_dt = :current_datetime
-        WHERE title = :title
-    """)
-    conn.execute(update_query, {
-        'current_datetime': datetime.now(),
-        'title': title_sql
-    })
-    print(f"Updated record for '{title_sql}' in the database.")
-                            
+# Renaming the file
+os.rename(original_file_path, new_file_path)
+print(f"Renamed {original_file_path} to {new_file_path}")
 
 
 
+
+
+
+
+#####
+# Section 3
+#####
+# Putting the transcribed episodes in a queue to be uploaded to Azure later
+
+
+# The path to your CSV file
+csv_file_path = '/home/maksym/Documents/airflow-docker/queues/transcriptions.csv'
+
+# The line to append to the CSV
+new_row = [f'{transcription_location}/{title_local}']
+# Append the new row to the CSV file
+with open(csv_file_path, mode='a', newline='') as file:
+    portalocker.lock(file, portalocker.LOCK_EX)
+    
+    writer = csv.writer(file, delimiter=',')
+    writer.writerow(new_row)
+    
+    # Unlock the file after writing
+    portalocker.unlock(file)

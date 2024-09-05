@@ -79,6 +79,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
     - /home/maksym/Documents/whisper:/home/maksym/Documents/whisper
     - /home/maksym/Documents/airflow-docker/external_scripts:/home/maksym/Documents/airflow-docker/external_scripts
+    - /home/maksym/Documents/airflow-docker:/home/maksym/Documents/airflow-docker
     - /home/maksym/.cache/whisper:/home/airflow/.cache/whisper
     - /home/maksym/Documents/airflow-docker/.env:/home/maksym/Documents/airflow-docker/.env
     - /home/maksym/Documents/whisper/files/azure/nouns_and_frequencies:/home/maksym/Documents/whisper/files/azure/nouns_and_frequencies

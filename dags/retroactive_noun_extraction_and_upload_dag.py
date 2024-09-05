@@ -20,7 +20,7 @@ python /home/maksym/Documents/airflow-docker/external_scripts/retroactive_noun_e
 
 with DAG("retroactive_noun_extraction_and_upload_dag", 
          start_date = datetime(2024, 8, 15), 
-         schedule_interval = "* * * * *", 
+         schedule_interval = "@continuous", 
          catchup = False, 
          max_active_runs=1 # doesn't run, if the most recent run is not finished
          ) as dag:
@@ -28,5 +28,5 @@ with DAG("retroactive_noun_extraction_and_upload_dag",
     run_local_script = BashOperator(
         task_id = "retroactive_noun_extraction_and_upload_task",
         bash_command = bash_command,
-        execution_timeout=timedelta(seconds=150)
+        execution_timeout=timedelta(seconds=500)
     )

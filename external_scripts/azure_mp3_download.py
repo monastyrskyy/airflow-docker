@@ -88,3 +88,5 @@ for blob in container_client.list_blobs():
                 'title': blob.name
             })
             print(f"Updated record for '{blob.name}' in the database.")
+
+print('This is printed after the for loop.')

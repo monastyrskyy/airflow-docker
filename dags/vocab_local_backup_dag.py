@@ -75,7 +75,7 @@ python /home/maksym/Documents/airflow-docker/external_scripts/vocab_local_backup
 
 with DAG("vocab_local_backup_dag", 
     start_date = datetime(2024, 8, 26),
-    schedule_interval = "0 17 * * *",
+    schedule_interval = "0 13 * * *",
     catchup = False,
     max_active_runs=1 # doesn't run, if the most recent run is not finished
 ) as dag:
