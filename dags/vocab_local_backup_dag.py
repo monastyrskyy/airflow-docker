@@ -39,6 +39,11 @@ def commit_and_push():
         print("GitHub credentials are not set in environment variables.")
         return
 
+    # Set Git user configuration (fix for missing user identity)
+    subprocess.run(["git", "config", "--global", "user.email", github_username], check=True)
+    subprocess.run(["git", "config", "--global", "user.name", "Bruh Automatic"], check=True)
+
+
     # Check if nouns.csv exists
     if os.path.isfile("/home/maksym/Documents/whisper/files/azure/nouns_and_frequencies/nouns.csv"):
         try:
@@ -48,6 +53,10 @@ def commit_and_push():
             add_output = subprocess.check_output(["git", "add", "episodes_table.csv"], stderr=subprocess.STDOUT)
             print(add_output.decode())
             add_output = subprocess.check_output(["git", "add", "phrases.csv"], stderr=subprocess.STDOUT)
+            print(add_output.decode())
+            add_output = subprocess.check_output(["git", "add", "verbs.csv"], stderr=subprocess.STDOUT)
+            print(add_output.decode())
+            add_output = subprocess.check_output(["git", "add", "weights_and_calcs.csv"], stderr=subprocess.STDOUT)
             print(add_output.decode())
 
             # Commit changes
