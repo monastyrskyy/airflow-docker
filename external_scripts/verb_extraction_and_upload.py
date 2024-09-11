@@ -215,6 +215,19 @@ with engine.begin() as conn:
     conn.execute(text(delete_stale_records))
     print('Deleted low frequency words that have not been updated.')
 
+
+# Deleting non-infinitive records
+delete_non_infinitive_records = f"""
+DELETE FROM vocab.verbs
+WHERE 
+    verb LIKE '%t';
+"""
+
+# Execute the query in the database
+with engine.begin() as conn:
+    conn.execute(text(delete_non_infinitive_records))
+    print('Deleted non-infinite records.')
+
 # Construct the full SQL query with all rows in the VALUES clause
 merge_query = f"""
 MERGE INTO vocab.verbs AS target
