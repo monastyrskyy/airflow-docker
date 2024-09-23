@@ -6,3 +6,6 @@ queues/
 .gitattributes
 .env
 *.pyc
+adhoc.py
+chat
+existing

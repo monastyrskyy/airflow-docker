@@ -21,6 +21,7 @@
 #
 # Misc.:
 #       - Tutorial: https://www.youtube.com/watch?v=UWOPQlxk-LM
+#       - Wow, much much faster: https://github.com/Vaibhavs10/insanely-fast-whisper
 # 
 # ===================================================================================
 
@@ -38,6 +39,9 @@ import random
 import csv
 import portalocker
 from huggingface_hub import hf_hub_download
+import torch
+from transformers import pipeline
+from transformers.utils import is_flash_attn_2_available
 
 
 
@@ -119,24 +123,60 @@ if selected_mp3:
 # Get the current date and time
 current_datetime = datetime.now()
 
+# Helper functions to format timestamps
+def format_timestamp_srt(t):
+    hours = int(t // 3600)
+    minutes = int((t % 3600) // 60)
+    seconds = int(t % 60)
+    milliseconds = int((t - int(t)) * 1000)
+    return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
 
-if mp3_location == "/home/maksym/Documents/whisper/files/azure/mp3/Conan-O’Brien-Needs-A-Friend": # supposedly a much faster model that's still very good
-    model_path = hf_hub_download(repo_id = "distil-whisper/distil-large-v3-openai", filename="model.bin")
-    model = whisper.load_model(model_path, device="cuda")
-    print('Loaded the distilled model')
-else:
-    model = whisper.load_model('large-v3', device="cuda")
-    print('Loaded regular model')
+pipe = pipeline(
+    "automatic-speech-recognition",
+    model="openai/whisper-large-v3", # select checkpoint from https://huggingface.co/openai/whisper-large-v3#model-details
+    torch_dtype=torch.float16,
+    device="cuda:0", # or mps for Mac devices
+    model_kwargs={"attn_implementation": "flash_attention_2"} if is_flash_attn_2_available() else {"attn_implementation": "sdpa"},
+)
 
 
 # Create the transcriptio directory for every file
 output_dir = transcription_location + '/' + title_local + '/'
 os.makedirs(output_dir, exist_ok=True)
 
-result = model.transcribe(mp3_location + '/' + title_local + '.mp3')
+outputs = pipe(
+    mp3_location + '/' + title_local + '.mp3',
+    chunk_length_s=30,
+    batch_size=24,
+    return_timestamps=True,
+)
 
-writer = get_writer("all", output_dir)
-writer(result, title_local)
+chunks = outputs.get('chunks', [])
+
+# Writing to .srt file
+with open(f"{output_dir}{title_local}.srt", "w", encoding="utf-8") as f:
+    for i, chunk in enumerate(chunks):
+        index = i + 1
+        start_time = chunk['timestamp'][0]
+        end_time = chunk['timestamp'][1]
+        text = chunk['text'].strip()  # Remove leading and trailing whitespace
+
+        start_timestamp = format_timestamp_srt(start_time)
+        end_timestamp = format_timestamp_srt(end_time)
+
+        f.write(f"{index}\n")
+        f.write(f"{start_timestamp} --> {end_timestamp}\n")
+        f.write(f"{text}\n\n")
+print("Transcription saved to 'transcription.srt'.")
+
+# Write the entire transcription to a single file
+with open(f"{output_dir}{title_local}.txt", "w", encoding="utf-8") as f:
+    f.write(outputs["text"])
+print("Transcription saved to 'transcription.txt'.")
+
+
+
+
 
 
 # Renaming the MP3 file after transcription
@@ -157,7 +197,6 @@ print(f"Renamed {original_file_path} to {new_file_path}")
 # Section 3
 #####
 # Putting the transcribed episodes in a queue to be uploaded to Azure later
-
 
 # The path to your CSV file
 csv_file_path = '/home/maksym/Documents/airflow-docker/queues/transcriptions.csv'

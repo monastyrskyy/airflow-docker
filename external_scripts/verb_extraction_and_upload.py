@@ -30,6 +30,7 @@ import os
 from sqlalchemy import create_engine, text
 from datetime import datetime
 import re
+import sys
 
 pd.set_option('display.max_rows', 1000)
 
@@ -176,11 +177,17 @@ print(df.sort_values(by='frequency', ascending=False)[0:10])
 #####
 # Writing the data to the SQL database.
 
-# Construct the VALUES clause for the entire DataFrame
-values_clause = ", ".join(
-    [f"('{row['verb']}', {row['frequency']}, '{row['last_updated_dt']}')"
-    for _, row in df.iterrows()]
-)
+if not df.empty:
+    # Construct the VALUES clause for the entire DataFrame
+    values_clause = ", ".join(
+        [f"('{row['verb']}', {row['frequency']}, '{row['last_updated_dt']}')"
+        for _, row in df.iterrows()]
+    )
+else:
+    print("No data to merge.")
+    sys.exit() #stopping the script
+
+
 
 
 # Preventing a one-to-many join in the MERGE query below
