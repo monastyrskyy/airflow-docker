@@ -80,19 +80,25 @@ for blob in container_client.list_blobs():
         
         print(f"Downloaded {blob.name} to {original_download_file_path}")
 
+        # In the section below:
+        # WHERE REPLACE(title, ' ', '-') = :title 
+        # 'title': sql_title
+        # This is a ducttape solution to a bug that I don't know if it works 100%
+        # The bug was that the title wasn't right and the record in the SQL table wasn't updating the download_flag_local
+        sql_title = os.path.splitext(blob.name)[0].split('/')[-1]
+
         # Update the record in SQL:
         with engine.begin() as conn:
             update_query = text("""
                 UPDATE rss_schema.rss_feed
                 SET download_flag_local = 'Y', download_dt_local = :current_datetime
-                WHERE title = :title
+                WHERE REPLACE(title, ' ', '-') = :title
             """)
             conn.execute(update_query, {
                 'current_datetime': datetime.now(),
-                'title': blob.name
+                'title': sql_title
             })
-            print(f"Updated record for '{blob.name}' in the database.")
-
+            print(f"Updated record for '{sql_title}' in the database.")
 
 
 print('This is printed after the for loop.')
