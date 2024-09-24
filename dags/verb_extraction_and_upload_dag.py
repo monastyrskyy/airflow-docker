@@ -20,7 +20,7 @@ python /home/maksym/Documents/airflow-docker/external_scripts/verb_extraction_an
 
 with DAG("verb_extraction_and_upload_dag", 
          start_date = datetime(2024, 8, 15), 
-         schedule_interval = "2/30 * * * *", 
+         schedule_interval = "2/5 * * * *", 
          catchup = False, 
          max_active_runs=1 # doesn't run, if the most recent run is not finished
          ) as dag:

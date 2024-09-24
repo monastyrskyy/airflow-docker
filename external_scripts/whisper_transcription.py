@@ -95,8 +95,14 @@ for root, dirs, files in os.walk(selected_directory):
                 # Stop searching as we have found a random untranscribed file
                 break
     if not selected_mp3:
-        selected_mp3 = os.path.join(root, file)
-        print(root)
+        for file in files:
+            if file.endswith(".mp3") and not file.endswith("_transcribed.mp3"):
+                selected_mp3 = os.path.join(root, file)
+                relative_path = os.path.relpath(selected_mp3, mp3_root_directory)
+                transcription_location = os.path.join(transcription_root_directory, os.path.dirname(relative_path))
+                os.makedirs(transcription_location, exist_ok=True)
+                print(root)
+                break
     else:
         break
 
@@ -144,8 +150,14 @@ pipe = pipeline(
 output_dir = transcription_location + '/' + title_local + '/'
 os.makedirs(output_dir, exist_ok=True)
 
+# Read the audio file into bytes, so that ffmpeg is not weirded out by special characters in the file names
+audio_file_path = os.path.join(mp3_location, title_local + '.mp3')
+with open(audio_file_path, 'rb') as f:
+    audio_bytes = f.read()
+
+# Proceed with transcription using audio bytes
 outputs = pipe(
-    mp3_location + '/' + title_local + '.mp3',
+    audio_bytes,
     chunk_length_s=30,
     batch_size=24,
     return_timestamps=True,
@@ -155,11 +167,20 @@ chunks = outputs.get('chunks', [])
 
 # Writing to .srt file
 with open(f"{output_dir}{title_local}.srt", "w", encoding="utf-8") as f:
+    previous_end_time = 0.0  # Initialize previous_end_time
+    default_duration = 1.0    # Default duration in seconds if end_time is None
+
     for i, chunk in enumerate(chunks):
         index = i + 1
         start_time = chunk['timestamp'][0]
         end_time = chunk['timestamp'][1]
         text = chunk['text'].strip()  # Remove leading and trailing whitespace
+
+        # Provide default values if start_time or end_time is None
+        if start_time is None:
+            start_time = previous_end_time
+        if end_time is None:
+            end_time = start_time + default_duration
 
         start_timestamp = format_timestamp_srt(start_time)
         end_timestamp = format_timestamp_srt(end_time)
@@ -167,6 +188,8 @@ with open(f"{output_dir}{title_local}.srt", "w", encoding="utf-8") as f:
         f.write(f"{index}\n")
         f.write(f"{start_timestamp} --> {end_timestamp}\n")
         f.write(f"{text}\n\n")
+
+        previous_end_time = end_time  # Update previous_end_time
 print("Transcription saved to 'transcription.srt'.")
 
 # Write the entire transcription to a single file
