@@ -26,79 +26,129 @@
 
 
 # Libraries
-from azure.storage.blob import BlobServiceClient
+import pandas as pd
 from dotenv import load_dotenv
 import os
 from sqlalchemy import create_engine, text
 from datetime import datetime
+import re
+from IPython.display import display
+from azure.storage.blob import BlobServiceClient
 
+from datetime import datetime
+
+
+
+pd.set_option('display.max_rows', 1000)
+
+
+
+#####
+# Section 1
+#####
+# Extracting the vocab.
+
+# SQL variables and strings
 # Load environment variables from .env file
 load_dotenv("/home/maksym/Documents/airflow-docker/.env")
 sql_server_name = os.environ["SQLServerName"]
 database_name = os.environ["DBName"]
 sql_username = os.environ["SQLUserName"]
 sql_password = os.environ["SQLPass"]
-
-
-# Construct the SQLAlchemy connection string
 connection_string = f"mssql+pymssql://{sql_username}:{sql_password}@{sql_server_name}/{database_name}"
 engine = create_engine(connection_string)
-
-
-# Load environment variables from .env file
-load_dotenv("/home/maksym/Documents/airflow-docker/.env")
 connection_str = os.environ["AZURE_CONNECTION_STR"]
 container_name = 'mp3'
-
-# Set up
 blob_service_client = BlobServiceClient.from_connection_string(conn_str=connection_str)
 container_client = blob_service_client.get_container_client(container_name)
+download_directory = "/home/maksym/Documents/whisper/files/azure/mp3/"
 
-# Directory to save the downloaded blobs
-download_directory = "/home/maksym/Documents/whisper/files/azure"
 
-# Create the download directory if it doesn't exist
-os.makedirs(download_directory, exist_ok=True)
 
-for blob in container_client.list_blobs():
-    # Define both original and transcribed file paths
-    original_download_file_path = os.path.join(download_directory, blob.name)
-    transcribed_download_file_path = os.path.join(
-        download_directory, os.path.splitext(blob.name)[0] + "_transcribed" + os.path.splitext(blob.name)[1]
-    )
+with engine.begin() as conn:
+    # Grab an episode that has been transcribed, but transcription is only still on local
+    # transcription_location would be set to Azure once the upload has been done
+    check_query = text("SELECT * \
+                       FROM rss_schema.rss_feed \
+                       WHERE download_flag_azure = 'Y' \
+                       AND download_flag_local = 'N'")
+    df = pd.read_sql_query(check_query, conn)
 
-    # Check if either the original or transcribed file already exists locally
-    if not (os.path.exists(original_download_file_path) or os.path.exists(transcribed_download_file_path)):
-        # Ensure the directory exists by creating it
-        os.makedirs(os.path.dirname(original_download_file_path), exist_ok=True)
+
+
+
+
+if df.empty:
+    print("No new files to download.")
+else:
+    print('hi')
+
+    for index, row in df.iterrows():
+        podcast_title = row['podcast_title']
+        episode_title = row['title']
+
+        # Checking old and new naming conventions
+        blob_podcast_title = re.sub(r'[^\w\-_\. ]', '_', podcast_title.replace(' ', '-'))
+        blob_podcast_title_old = podcast_title.replace(' ', '-')
+        blob_episode_title = re.sub(r'[^\w\-_\. ]', '_', episode_title.replace(' ', '-'))
+        blob_episode_title_old = episode_title.replace(' ', '-')
+
         
-        # Download the blob
-        blob_client = container_client.get_blob_client(blob)
-        with open(original_download_file_path, "wb") as download_file:
-            download_data = blob_client.download_blob()
-            download_file.write(download_data.readall())
+        # Generate all possible blob paths
+        blob_paths = {
+            "new_new": f'mp3/{blob_podcast_title}/{blob_episode_title}.mp3',
+            "old_new": f'mp3/{blob_podcast_title_old}/{blob_episode_title}.mp3',
+            "old_old": f'mp3/{blob_podcast_title_old}/{blob_episode_title_old}.mp3',
+            "new_old": f'mp3/{blob_podcast_title}/{blob_episode_title_old}.mp3'
+        }
+
+
+        # Initialize a flag to track if the blob exists
+        blob_exists = False
+
+        # Loop over all possible paths and check for existence
+        for path_name, blob_path in blob_paths.items():
+            blob_client = container_client.get_blob_client(blob_path)
+            if blob_client.exists():
+                blob_exists = True
+
+                # Determine the local folder based on the sanitized podcast title
+                local_folder_path = os.path.join(download_directory, blob_podcast_title)
+
+                # Check if the folder exists, create it if not
+                if not os.path.exists(local_folder_path):
+                    os.makedirs(local_folder_path)
+
+                # Define the full local path for the MP3 file
+                local_file_path = os.path.join(local_folder_path, f"{blob_episode_title}.mp3")
+
+
+                # Download the blob to the local file
+                with open(local_file_path, "wb") as download_file:
+                    download_data = blob_client.download_blob()
+                    download_file.write(download_data.readall())
+                
+                print(f'Downloaded {local_file_path}.')
+
+
+                # Update the database to set download_flag_azure to 'N'
+                with engine.begin() as conn:
+                    update_query = text("""
+                        UPDATE rss_schema.rss_feed
+                        SET download_flag_local = 'Y', download_dt_local = :current_datetime
+                        WHERE podcast_title = :podcast_title
+                        AND title = :episode_title
+                    """)
+                    conn.execute(update_query, {
+                                                    'podcast_title': podcast_title,
+                                                    'episode_title': episode_title,
+                                                    'current_datetime': datetime.now()
+                                                })
+                    print(f'Updated corresponding record in the rss_schema.rss_feed table.')
+
+
+                break  # Stop checking once we find an existing blob
         
-        print(f"Downloaded {blob.name} to {original_download_file_path}")
+        if not blob_exists:
+            print(f'Did not find the blob on Azure for {podcast_title} and {episode_title}.')
 
-        # In the section below:
-        # WHERE REPLACE(title, ' ', '-') = :title 
-        # 'title': sql_title
-        # This is a ducttape solution to a bug that I don't know if it works 100%
-        # The bug was that the title wasn't right and the record in the SQL table wasn't updating the download_flag_local
-        sql_title = os.path.splitext(blob.name)[0].split('/')[-1]
-
-        # Update the record in SQL:
-        with engine.begin() as conn:
-            update_query = text("""
-                UPDATE rss_schema.rss_feed
-                SET download_flag_local = 'Y', download_dt_local = :current_datetime
-                WHERE REPLACE(title, ' ', '-') = :title
-            """)
-            conn.execute(update_query, {
-                'current_datetime': datetime.now(),
-                'title': sql_title
-            })
-            print(f"Updated record for '{sql_title}' in the database.")
-
-
-print('This is printed after the for loop.')

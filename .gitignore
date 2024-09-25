@@ -2,6 +2,7 @@ logs/
 crontab_logs/
 /dags/__pycache__/
 queues/
+adhoc/
 
 .gitattributes
 .env
