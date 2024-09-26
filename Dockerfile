@@ -1,5 +1,7 @@
 FROM apache/airflow:2.9.3
 
+# Set the timezone environment variable
+ENV TZ=Europe/Berlin
 
 # Add root user if it's missing
 RUN echo "root:x:0:0:root:/root:/bin/bash" >> /etc/passwd
@@ -20,3 +22,4 @@ RUN pip install -U spacy
 RUN python -m spacy download de_dep_news_trf
 RUN pip install german-nouns
 RUN pip install pandas
+RUN pip install ipython

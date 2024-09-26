@@ -42,6 +42,7 @@ from huggingface_hub import hf_hub_download
 import torch
 from transformers import pipeline
 from transformers.utils import is_flash_attn_2_available
+import re
 
 
 
@@ -119,8 +120,6 @@ if selected_mp3:
 
 
 
-
-
 #####
 # Section 2
 #####
@@ -129,86 +128,131 @@ if selected_mp3:
 # Get the current date and time
 current_datetime = datetime.now()
 
-# Helper functions to format timestamps
-def format_timestamp_srt(t):
-    hours = int(t // 3600)
-    minutes = int((t % 3600) // 60)
-    seconds = int(t % 60)
-    milliseconds = int((t - int(t)) * 1000)
-    return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
-
-pipe = pipeline(
-    "automatic-speech-recognition",
-    model="openai/whisper-large-v3", # select checkpoint from https://huggingface.co/openai/whisper-large-v3#model-details
-    torch_dtype=torch.float16,
-    device="cuda:0", # or mps for Mac devices
-    model_kwargs={"attn_implementation": "flash_attention_2"} if is_flash_attn_2_available() else {"attn_implementation": "sdpa"},
-)
+### New model doesn't like special characters in the names. the old one is fine with it. 
+# if there is a special character in the name, I will use the old model, otherwise the new one.
 
 
-# Create the transcriptio directory for every file
-output_dir = transcription_location + '/' + title_local + '/'
-os.makedirs(output_dir, exist_ok=True)
+if re.search(r"[\?\!]", title_local):
+    print('Using old model that can handle special characters.')
+    
+    model = whisper.load_model('small', device="cuda")
 
-# Read the audio file into bytes, so that ffmpeg is not weirded out by special characters in the file names
-audio_file_path = os.path.join(mp3_location, title_local + '.mp3')
-with open(audio_file_path, 'rb') as f:
-    audio_bytes = f.read()
+    # Create the transcriptio directory for every file
+    output_dir = transcription_location + '/' + title_local + '/'
+    os.makedirs(output_dir, exist_ok=True)
 
-# Proceed with transcription using audio bytes
-outputs = pipe(
-    audio_bytes,
-    chunk_length_s=30,
-    batch_size=24,
-    return_timestamps=True,
-)
+    result = model.transcribe(mp3_location + '/' + title_local + '.mp3')
 
-chunks = outputs.get('chunks', [])
+    writer = get_writer("all", output_dir)
+    writer(result, title_local)
+else:
+    print('Using the new faster model that cannot handle special characters.')
+    # Helper functions to format timestamps
+    def format_timestamp_srt(t):
+        hours = int(t // 3600)
+        minutes = int((t % 3600) // 60)
+        seconds = int(t % 60)
+        milliseconds = int((t - int(t)) * 1000)
+        return f"{hours:02}:{minutes:02}:{seconds:02},{milliseconds:03}"
 
-# Writing to .srt file
-with open(f"{output_dir}{title_local}.srt", "w", encoding="utf-8") as f:
-    previous_end_time = 0.0  # Initialize previous_end_time
-    default_duration = 1.0    # Default duration in seconds if end_time is None
-
-    for i, chunk in enumerate(chunks):
-        index = i + 1
-        start_time = chunk['timestamp'][0]
-        end_time = chunk['timestamp'][1]
-        text = chunk['text'].strip()  # Remove leading and trailing whitespace
-
-        # Provide default values if start_time or end_time is None
-        if start_time is None:
-            start_time = previous_end_time
-        if end_time is None:
-            end_time = start_time + default_duration
-
-        start_timestamp = format_timestamp_srt(start_time)
-        end_timestamp = format_timestamp_srt(end_time)
-
-        f.write(f"{index}\n")
-        f.write(f"{start_timestamp} --> {end_timestamp}\n")
-        f.write(f"{text}\n\n")
-
-        previous_end_time = end_time  # Update previous_end_time
-print("Transcription saved to 'transcription.srt'.")
-
-# Write the entire transcription to a single file
-with open(f"{output_dir}{title_local}.txt", "w", encoding="utf-8") as f:
-    f.write(outputs["text"])
-print("Transcription saved to 'transcription.txt'.")
+    pipe = pipeline(
+        "automatic-speech-recognition",
+        model="openai/whisper-large-v3", # select checkpoint from https://huggingface.co/openai/whisper-large-v3#model-details
+        torch_dtype=torch.float16,
+        device="cuda:0", # or mps for Mac devices
+        model_kwargs={"attn_implementation": "flash_attention_2"} if is_flash_attn_2_available() else {"attn_implementation": "sdpa"},
+    )
 
 
+    # Create the transcriptio directory for every file
+    output_dir = transcription_location + '/' + title_local + '/'
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Read the audio file into bytes, so that ffmpeg is not weirded out by special characters in the file names
+    audio_file_path = os.path.join(mp3_location, title_local + '.mp3')
+    with open(audio_file_path, 'rb') as f:
+        audio_bytes = f.read()
+
+    # Proceed with transcription using audio bytes
+    outputs = pipe(
+        audio_bytes,
+        chunk_length_s=30,
+        batch_size=24,
+        return_timestamps=True,
+    )
+
+    chunks = outputs.get('chunks', [])
+
+    # Writing to .srt file
+    with open(f"{output_dir}{title_local}.srt", "w", encoding="utf-8") as f:
+        previous_end_time = 0.0  # Initialize previous_end_time
+        default_duration = 1.0    # Default duration in seconds if end_time is None
+
+        for i, chunk in enumerate(chunks):
+            index = i + 1
+            start_time = chunk['timestamp'][0]
+            end_time = chunk['timestamp'][1]
+            text = chunk['text'].strip()  # Remove leading and trailing whitespace
+
+            # Provide default values if start_time or end_time is None
+            if start_time is None:
+                start_time = previous_end_time
+            if end_time is None:
+                end_time = start_time + default_duration
+
+            start_timestamp = format_timestamp_srt(start_time)
+            end_timestamp = format_timestamp_srt(end_time)
+
+            f.write(f"{index}\n")
+            f.write(f"{start_timestamp} --> {end_timestamp}\n")
+            f.write(f"{text}\n\n")
+
+            previous_end_time = end_time  # Update previous_end_time
+    print("Transcription saved to 'transcription.srt'.")
+
+    # Write the entire transcription to a single file
+    with open(f"{output_dir}{title_local}.txt", "w", encoding="utf-8") as f:
+        f.write(outputs["text"])
+    print("Transcription saved to 'transcription.txt'.")
 
 
 
+
+
+
+
+# Renaming Original file with allowing for too long file names that are too long and must be truncated
+
+def rename_with_suffix(original_path, suffix='_transcribed', max_filename_length=255):
+    """
+    Renames a file by appending a suffix. If the new filename exceeds the maximum length,
+    it truncates the original filename to accommodate the suffix.
+
+    :param original_path: Full path to the original file.
+    :param suffix: Suffix to append to the filename.
+    :param max_filename_length: Maximum allowed length for the filename.
+    :return: New file path with the suffix.
+    """
+    directory, filename = os.path.split(original_path)
+    base, ext = os.path.splitext(filename)
+    suffix_with_ext = suffix + ext
+
+    # Calculate the maximum allowed length for the base filename
+    max_base_length = max_filename_length - len(suffix_with_ext)
+
+    if len(base) > max_base_length:
+        base = base[:max_base_length]
+        print(f"Filename truncated to: {base}{suffix_with_ext}")
+
+    new_filename = base + suffix_with_ext
+    new_file_path = os.path.join(directory, new_filename)
+    print(f"Renamed {original_file_path} to {new_file_path}")
+    return new_file_path
 
 # Renaming the MP3 file after transcription
-original_file_path = mp3_location + '/' + title_local + '.mp3'
-new_file_path = mp3_location + '/' + title_local + '_transcribed.mp3'
+original_file_path = os.path.join(mp3_location, f"{title_local}.mp3")
+new_file_path = rename_with_suffix(original_file_path, suffix='_transcribed')
 
-# Renaming the file
-os.rename(original_file_path, new_file_path)
-print(f"Renamed {original_file_path} to {new_file_path}")
 
 
 

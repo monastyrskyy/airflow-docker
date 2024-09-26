@@ -138,7 +138,7 @@ for index, row in df.iterrows():
             update_query = text("""
                 UPDATE rss_schema.rss_feed
                 SET transcription_location = 'Azure', transcription_dt = :current_datetime
-                WHERE REPLACE(title, ' ', '-') = :title
+                WHERE REPLACE(title, ' ', '-') LIKE CONCAT(:title, '%')
             """)
             conn.execute(update_query, {
                 'title': file_name_without_extension,
