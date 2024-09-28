@@ -69,14 +69,15 @@ with engine.begin() as conn:
                        FROM rss_schema.rss_feed \
                        WHERE verbs_extraction_flag = 'N' \
                        AND transcription_dt IS NOT NULL \
-                       AND language IN ('de', 'de-DE')")
+                       AND language IN ('de', 'de-DE') \
+                       ORDER BY NEWID()")
     result = conn.execute(check_query).fetchall()
 
     if result == []:
         print("No new vocab to upload.")
     else:
         title_sql = result[0][0]
-        title_local = result[0][0].replace(' ', '-')
+        title_local = result[0][0].replace(' ', '-').replace('(', '_').replace(')', '_').replace("'", '_')
         print(f'file name: {title_local}')
         # Edge-case check
         found_it = False
