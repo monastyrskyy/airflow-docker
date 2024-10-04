@@ -43,6 +43,7 @@ import torch
 from transformers import pipeline
 from transformers.utils import is_flash_attn_2_available
 import re
+import gc
 
 
 
@@ -205,6 +206,8 @@ print("Transcription saved to 'transcription.txt'.")
 
 # Renaming Original file with allowing for too long file names that are too long and must be truncated
 
+import os
+
 def rename_with_suffix(original_path, suffix='_transcribed', max_filename_length=255):
     """
     Renames a file by appending a suffix. If the new filename exceeds the maximum length,
@@ -228,8 +231,18 @@ def rename_with_suffix(original_path, suffix='_transcribed', max_filename_length
 
     new_filename = base + suffix_with_ext
     new_file_path = os.path.join(directory, new_filename)
-    print(f"Renamed {original_file_path} to {new_file_path}")
+
+    # Perform the file rename operation
+    try:
+        os.rename(original_path, new_file_path)
+        print(f"Renamed {original_path} to {new_file_path}")
+    except Exception as e:
+        print(f"Failed to rename {original_path} to {new_file_path}: {e}")
+        # Optionally, re-raise the exception or handle it as needed
+        raise
+
     return new_file_path
+
 
 # Renaming the MP3 file after transcription
 original_file_path = os.path.join(mp3_location, f"{title_local}.mp3")
@@ -261,3 +274,16 @@ with open(csv_file_path, mode='a', newline='') as file:
     
     # Unlock the file after writing
     portalocker.unlock(file)
+
+
+
+#####
+# Section 4
+#####
+# Manually clearing cache, variables and garbage. 
+# I think the GPU gets blocked up with this stuff and the job stops running.
+
+
+del pipe
+torch.cuda.empty_cache()
+gc.collect()
