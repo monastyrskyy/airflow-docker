@@ -3,7 +3,8 @@ crontab_logs/
 /dags/__pycache__/
 queues/
 adhoc/
-
+fake_data/
+fake_reports/
 .gitattributes
 .env
 *.pyc

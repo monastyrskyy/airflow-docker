@@ -159,7 +159,8 @@ with open(audio_file_path, 'rb') as f:
 # Proceed with transcription using audio bytes
 outputs = pipe(
     audio_bytes,
-    chunk_length_s=30,
+    chunk_length_s=50,
+    stride_length_s=(5, 5),  # 5 seconds overlap at start and end of each chunk
     batch_size=24,
     return_timestamps=True,
 )
